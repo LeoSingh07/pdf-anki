@@ -98,31 +98,59 @@ if (selectedFile) {
 
   const handleMouseUp = useCallback(async () => {
     if (!isSelecting || !selection || !pageRef.current) return;
-    
+
     setIsSelecting(false);
-    
-    // Capture the selected area
+
+    // Capture the selected area relative to the canvas, accounting for device pixel ratio
     const canvas = pageRef.current.querySelector('canvas');
     if (canvas && onAreaSelect) {
+      const canvasRect = canvas.getBoundingClientRect();
+      const containerRect = pageRef.current.getBoundingClientRect();
+
+      // Selection in container CSS pixels
+      const selLeftCss = Math.min(selection.startX, selection.endX);
+      const selTopCss = Math.min(selection.startY, selection.endY);
+      const selWidthCss = Math.abs(selection.endX - selection.startX);
+      const selHeightCss = Math.abs(selection.endY - selection.startY);
+
+      // Convert container-relative CSS px to canvas-relative CSS px
+      const leftOnCanvasCss = selLeftCss - (canvasRect.left - containerRect.left);
+      const topOnCanvasCss = selTopCss - (canvasRect.top - containerRect.top);
+
+      // Map CSS pixels to canvas pixel coordinates
+      const scaleX = canvas.width / canvasRect.width;
+      const scaleY = canvas.height / canvasRect.height;
+
+      const sx = Math.max(0, Math.round(leftOnCanvasCss * scaleX));
+      const sy = Math.max(0, Math.round(topOnCanvasCss * scaleY));
+      const sw = Math.max(1, Math.round(selWidthCss * scaleX));
+      const sh = Math.max(1, Math.round(selHeightCss * scaleY));
+
+      // Guard against tiny selections
+      if (sw < 5 || sh < 5) {
+        setSelection(null);
+        toast({ title: 'Selection too small', description: 'Drag a larger area to capture.', variant: 'destructive' });
+        return;
+      }
+
       const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = sw;
+      tempCanvas.height = sh;
       const ctx = tempCanvas.getContext('2d');
-      
+
       if (ctx) {
-        const { startX, startY, endX, endY } = selection;
-        const width = Math.abs(endX - startX);
-        const height = Math.abs(endY - startY);
-        const x = Math.min(startX, endX);
-        const y = Math.min(startY, endY);
-        
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-        
-        ctx.drawImage(canvas, x, y, width, height, 0, 0, width, height);
-        const imageData = tempCanvas.toDataURL('image/png');
-        onAreaSelect(imageData);
+        try {
+          ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+          const imageData = tempCanvas.toDataURL('image/png');
+          onAreaSelect(imageData);
+          toast({ title: 'Image added to back', description: 'Selected area captured from PDF.' });
+        } catch (err) {
+          console.error('Area capture error:', err);
+          toast({ title: 'Capture failed', description: 'Try again or reload the PDF.', variant: 'destructive' });
+        }
       }
     }
-    
+
     setSelection(null);
   }, [isSelecting, selection, onAreaSelect]);
 
@@ -222,7 +250,7 @@ if (selectedFile) {
             <div
               ref={pageRef}
               className={cn(
-                "relative border border-border shadow-md",
+                "relative border border-border shadow-md select-none",
                 isSelecting && "cursor-crosshair"
               )}
               onMouseDown={handleMouseDown}
@@ -249,6 +277,8 @@ if (selectedFile) {
                 <Page
                   pageNumber={pageNumber}
                   scale={scale}
+                  renderAnnotationLayer={false}
+                  renderTextLayer={false}
                   onRenderError={(err) => {
                     console.error('Page render error:', err);
                     toast({ title: 'Failed to render page', description: 'Try zooming out or reloading.', variant: 'destructive' });
