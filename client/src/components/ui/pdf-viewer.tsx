@@ -68,17 +68,14 @@ if (selectedFile) {
     setScale(prev => Math.max(0.5, prev - 0.2));
   };
 
-  const handleMouseDown = useCallback((event: React.MouseEvent) => {
-    console.log('Mouse down triggered, mode:', mode);
+  const startSelection = useCallback((clientX: number, clientY: number) => {
+    console.log('Starting selection, mode:', mode);
     if (mode !== 'select') return;
     if (!pageRef.current) return;
     
-    event.preventDefault();
-    event.stopPropagation();
-    
     const rect = pageRef.current.getBoundingClientRect();
-    const startX = event.clientX - rect.left;
-    const startY = event.clientY - rect.top;
+    const startX = clientX - rect.left;
+    const startY = clientY - rect.top;
     
     console.log('Starting selection at:', { startX, startY });
     setIsSelecting(true);
@@ -90,14 +87,27 @@ if (selectedFile) {
     });
   }, [mode]);
 
-  const handleMouseMove = useCallback((event: React.MouseEvent) => {
+  const handleMouseDown = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    startSelection(event.clientX, event.clientY);
+  }, [startSelection]);
+
+  const handleTouchStart = useCallback((event: React.TouchEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const touch = event.touches[0];
+    if (touch) {
+      startSelection(touch.clientX, touch.clientY);
+    }
+  }, [startSelection]);
+
+  const updateSelection = useCallback((clientX: number, clientY: number) => {
     if (!isSelecting || !pageRef.current || !selection) return;
     
-    event.preventDefault();
-    
     const rect = pageRef.current.getBoundingClientRect();
-    const endX = event.clientX - rect.left;
-    const endY = event.clientY - rect.top;
+    const endX = clientX - rect.left;
+    const endY = clientY - rect.top;
     
     console.log('Moving selection to:', { endX, endY });
     setSelection(prev => prev ? {
@@ -107,11 +117,23 @@ if (selectedFile) {
     } : null);
   }, [isSelecting, selection]);
 
-  const handleMouseUp = useCallback(async (event: React.MouseEvent) => {
-    console.log('Mouse up triggered, isSelecting:', isSelecting, 'selection:', selection);
+  const handleMouseMove = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    updateSelection(event.clientX, event.clientY);
+  }, [updateSelection]);
+
+  const handleTouchMove = useCallback((event: React.TouchEvent) => {
+    event.preventDefault();
+    const touch = event.touches[0];
+    if (touch) {
+      updateSelection(touch.clientX, touch.clientY);
+    }
+  }, [updateSelection]);
+
+  const endSelection = useCallback(async () => {
+    console.log('Ending selection, isSelecting:', isSelecting, 'selection:', selection);
     if (!isSelecting || !selection || !pageRef.current) return;
 
-    event.preventDefault();
     setIsSelecting(false);
 
     // Capture the selected area relative to the canvas, accounting for device pixel ratio
@@ -166,6 +188,16 @@ if (selectedFile) {
 
     setSelection(null);
   }, [isSelecting, selection, onAreaSelect]);
+
+  const handleMouseUp = useCallback(async (event: React.MouseEvent) => {
+    event.preventDefault();
+    await endSelection();
+  }, [endSelection]);
+
+  const handleTouchEnd = useCallback(async (event: React.TouchEvent) => {
+    event.preventDefault();
+    await endSelection();
+  }, [endSelection]);
 
   const renderSelectionOverlay = () => {
     if (!selection) return null;
@@ -283,12 +315,27 @@ if (selectedFile) {
               ref={pageRef}
               className={cn(
                 "relative border border-border shadow-md select-none",
-                mode === 'select' && "cursor-crosshair touch-none"
+                mode === 'select' && "cursor-crosshair touch-none user-select-none"
               )}
+              style={{
+                touchAction: mode === 'select' ? 'none' : 'auto',
+                WebkitUserSelect: 'none',
+                WebkitTouchCallout: 'none',
+                WebkitTapHighlightColor: 'transparent'
+              }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
               onMouseLeave={() => {
+                if (isSelecting) {
+                  setIsSelecting(false);
+                  setSelection(null);
+                }
+              }}
+              onTouchCancel={() => {
                 if (isSelecting) {
                   setIsSelecting(false);
                   setSelection(null);
