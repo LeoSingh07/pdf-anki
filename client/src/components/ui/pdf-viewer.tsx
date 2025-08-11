@@ -69,13 +69,18 @@ if (selectedFile) {
   };
 
   const handleMouseDown = useCallback((event: React.MouseEvent) => {
+    console.log('Mouse down triggered, mode:', mode);
     if (mode !== 'select') return;
     if (!pageRef.current) return;
+    
+    event.preventDefault();
+    event.stopPropagation();
     
     const rect = pageRef.current.getBoundingClientRect();
     const startX = event.clientX - rect.left;
     const startY = event.clientY - rect.top;
     
+    console.log('Starting selection at:', { startX, startY });
     setIsSelecting(true);
     setSelection({
       startX,
@@ -88,10 +93,13 @@ if (selectedFile) {
   const handleMouseMove = useCallback((event: React.MouseEvent) => {
     if (!isSelecting || !pageRef.current || !selection) return;
     
+    event.preventDefault();
+    
     const rect = pageRef.current.getBoundingClientRect();
     const endX = event.clientX - rect.left;
     const endY = event.clientY - rect.top;
     
+    console.log('Moving selection to:', { endX, endY });
     setSelection(prev => prev ? {
       ...prev,
       endX,
@@ -99,9 +107,11 @@ if (selectedFile) {
     } : null);
   }, [isSelecting, selection]);
 
-  const handleMouseUp = useCallback(async () => {
+  const handleMouseUp = useCallback(async (event: React.MouseEvent) => {
+    console.log('Mouse up triggered, isSelecting:', isSelecting, 'selection:', selection);
     if (!isSelecting || !selection || !pageRef.current) return;
 
+    event.preventDefault();
     setIsSelecting(false);
 
     // Capture the selected area relative to the canvas, accounting for device pixel ratio
@@ -278,6 +288,12 @@ if (selectedFile) {
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
+              onMouseLeave={() => {
+                if (isSelecting) {
+                  setIsSelecting(false);
+                  setSelection(null);
+                }
+              }}
             >
               <Document
                 file={file}

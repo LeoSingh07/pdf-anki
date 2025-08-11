@@ -61,6 +61,10 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        selection: "hsl(var(--selection))",
+        "selection-bg": "hsl(var(--selection-bg))",
+        "pdf-area": "hsl(var(--pdf-area))",
+        "card-area": "hsl(var(--card-area))",
       },
       keyframes: {
         "accordion-down": {
