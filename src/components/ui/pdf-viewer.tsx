@@ -2,7 +2,8 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ChevronLeft, ChevronRight, Upload, ZoomIn, ZoomOut } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { ChevronLeft, ChevronRight, Upload, ZoomIn, ZoomOut, Hand, BoxSelect } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/use-toast';
 
@@ -27,6 +28,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ onAreaSelect }) => {
   const [scale, setScale] = useState<number>(1.2);
   const [isSelecting, setIsSelecting] = useState<boolean>(false);
   const [selection, setSelection] = useState<SelectionArea | null>(null);
+  const [mode, setMode] = useState<'scroll' | 'select'>('scroll');
   const pageRef = useRef<HTMLDivElement>(null);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
@@ -67,6 +69,7 @@ if (selectedFile) {
   };
 
   const handleMouseDown = useCallback((event: React.MouseEvent) => {
+    if (mode !== 'select') return;
     if (!pageRef.current) return;
     
     const rect = pageRef.current.getBoundingClientRect();
@@ -80,7 +83,7 @@ if (selectedFile) {
       endX: startX,
       endY: startY,
     });
-  }, []);
+  }, [mode]);
 
   const handleMouseMove = useCallback((event: React.MouseEvent) => {
     if (!isSelecting || !pageRef.current || !selection) return;
@@ -240,6 +243,25 @@ if (selectedFile) {
             <Button variant="outline" size="sm" onClick={zoomIn}>
               <ZoomIn className="h-4 w-4" />
             </Button>
+
+            <div className="mx-4 w-px h-6 bg-border" />
+
+            <div className="ml-auto flex items-center gap-2">
+              {mode === 'select' ? (
+                <BoxSelect className="h-4 w-4" />
+              ) : (
+                <Hand className="h-4 w-4" />
+              )}
+              <Switch
+                id="toggle-select-mode"
+                checked={mode === 'select'}
+                onCheckedChange={(checked) => setMode(checked ? 'select' : 'scroll')}
+                aria-label="Toggle selection mode"
+              />
+              <span className="text-sm text-muted-foreground hidden sm:inline">
+                {mode === 'select' ? 'Select' : 'Scroll'}
+              </span>
+            </div>
           </div>
         )}
       </div>
@@ -251,7 +273,7 @@ if (selectedFile) {
               ref={pageRef}
               className={cn(
                 "relative border border-border shadow-md select-none",
-                isSelecting && "cursor-crosshair"
+                mode === 'select' && "cursor-crosshair touch-none"
               )}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
