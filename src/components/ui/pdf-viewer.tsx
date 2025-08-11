@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChevronLeft, ChevronRight, Upload, ZoomIn, ZoomOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from '@/components/ui/use-toast';
 
 // Set up PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
 interface PDFViewerProps {
   onAreaSelect?: (imageData: string) => void;
@@ -33,11 +34,20 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ onAreaSelect }) => {
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0];
-    if (selectedFile && selectedFile.type === 'application/pdf') {
-      setFile(selectedFile);
-      setPageNumber(1);
-    }
+const selectedFile = event.target.files?.[0];
+if (selectedFile) {
+  const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf');
+  if (isPdf) {
+    setFile(selectedFile);
+    setPageNumber(1);
+  } else {
+    toast({
+      title: 'Unsupported file',
+      description: 'Please select a valid PDF file.',
+      variant: 'destructive',
+    });
+  }
+}
   };
 
   const goToPrevPage = () => {
@@ -222,6 +232,14 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ onAreaSelect }) => {
               <Document
                 file={file}
                 onLoadSuccess={onDocumentLoadSuccess}
+                onLoadError={(err) => {
+                  console.error('PDF load error:', err);
+                  toast({ title: 'Failed to open PDF', description: 'The file may be corrupted or encrypted.', variant: 'destructive' });
+                }}
+                onSourceError={(err) => {
+                  console.error('PDF source error:', err);
+                  toast({ title: 'Failed to read file', description: 'Please try another PDF.', variant: 'destructive' });
+                }}
                 loading={
                   <div className="flex items-center justify-center h-96 bg-muted">
                     <div className="text-muted-foreground">Loading PDF...</div>
@@ -231,6 +249,10 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ onAreaSelect }) => {
                 <Page
                   pageNumber={pageNumber}
                   scale={scale}
+                  onRenderError={(err) => {
+                    console.error('Page render error:', err);
+                    toast({ title: 'Failed to render page', description: 'Try zooming out or reloading.', variant: 'destructive' });
+                  }}
                   loading={
                     <div className="flex items-center justify-center h-96 bg-muted">
                       <div className="text-muted-foreground">Loading page...</div>
