@@ -308,20 +308,21 @@ if (selectedFile) {
         )}
       </div>
       
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto p-4" style={{ overflowX: 'auto', overflowY: 'auto' }}>
         {file ? (
-          <div className="flex justify-center">
+          <div className="w-full min-w-fit">
             <div
               ref={pageRef}
               className={cn(
-                "relative border border-border shadow-md select-none",
+                "relative border border-border shadow-md select-none mx-auto",
                 mode === 'select' && "cursor-crosshair touch-none user-select-none"
               )}
               style={{
                 touchAction: mode === 'select' ? 'none' : 'auto',
                 WebkitUserSelect: 'none',
                 WebkitTouchCallout: 'none',
-                WebkitTapHighlightColor: 'transparent'
+                WebkitTapHighlightColor: 'transparent',
+                width: 'fit-content'
               }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
