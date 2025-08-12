@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Download, Trash2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import JSZip from 'jszip';
+import initSqlJs from 'sql.js';
 
 interface AnkiCard {
   id: string;
@@ -78,83 +79,289 @@ export const AnkiCardCreator: React.FC<AnkiCardCreatorProps> = ({ onAddImage }) 
     if (cards.length === 0) return;
 
     try {
-      // Create a simple text-based format that can be imported into Anki
-      let csvContent = '';
-      const mediaFiles: string[] = [];
+      const zip = new JSZip();
       
-      // Process each card
-      for (let i = 0; i < cards.length; i++) {
-        const card = cards[i];
-        let front = card.front.replace(/"/g, '""'); // Escape quotes for CSV
-        let back = card.back.text.replace(/"/g, '""');
-        
-        // Handle images - embed them as HTML img tags with base64 data
-        if (card.back.images.length > 0) {
-          let imageHtml = '';
-          card.back.images.forEach((imageData, imgIndex) => {
-            imageHtml += `<br><img src="${imageData}" style="max-width: 500px; height: auto;">`;
-          });
-          back += imageHtml;
-        }
-        
-        // Create CSV line (Front, Back)
-        csvContent += `"${front}","${back}"\n`;
-      }
+      // Generate unique IDs
+      const deckId = Math.floor(Math.random() * 1000000000);
+      const modelId = Math.floor(Math.random() * 1000000000);
+      const timestamp = Date.now();
       
-      // Create the file
-      const blob = new Blob([csvContent], { 
-        type: 'text/plain;charset=utf-8' 
+      // Media files mapping for Anki
+      const mediaFiles: { [key: string]: string } = {};
+      
+      // Process images and create media files
+      let mediaIndex = 0;
+      const processedCards = cards.map((card, cardIndex) => {
+        let imageReferences = '';
+        
+        card.back.images.forEach((imageData, imgIndex) => {
+          const filename = `${mediaIndex}.png`;
+          const base64Data = imageData.split(',')[1]; // Remove data:image/png;base64,
+          
+          // Add image to zip
+          zip.file(filename, base64Data, { base64: true });
+          
+          // Add to media mapping
+          mediaFiles[mediaIndex.toString()] = filename;
+          
+          // Create HTML reference for the image
+          imageReferences += `<br><img src="${filename}">`;
+          
+          mediaIndex++;
+        });
+        
+        return {
+          ...card,
+          imageHtml: imageReferences
+        };
       });
       
-      const url = URL.createObjectURL(blob);
+      // Create media file (required by Anki)
+      zip.file("media", JSON.stringify(mediaFiles));
+      
+      // Create proper SQLite database for Anki
+      const SQL = await initSqlJs({
+        locateFile: (file: string) => `https://sql.js.org/dist/${file}`
+      });
+      
+      const db = new SQL.Database();
+      
+      // Create Anki database schema
+      db.exec(`
+        CREATE TABLE col (
+          id integer primary key,
+          crt integer not null,
+          mod integer not null,
+          scm integer not null,
+          ver integer not null,
+          dty integer not null,
+          usn integer not null,
+          ls integer not null,
+          conf text not null,
+          models text not null,
+          decks text not null,
+          dconf text not null,
+          tags text not null
+        );
+        
+        CREATE TABLE notes (
+          id integer primary key,
+          guid text not null,
+          mid integer not null,
+          mod integer not null,
+          usn integer not null,
+          tags text not null,
+          flds text not null,
+          sfld text not null,
+          csum integer not null,
+          flags integer not null,
+          data text not null
+        );
+        
+        CREATE TABLE cards (
+          id integer primary key,
+          nid integer not null,
+          did integer not null,
+          ord integer not null,
+          mod integer not null,
+          usn integer not null,
+          type integer not null,
+          queue integer not null,
+          due integer not null,
+          ivl integer not null,
+          factor integer not null,
+          reps integer not null,
+          lapses integer not null,
+          left integer not null,
+          odue integer not null,
+          odid integer not null,
+          flags integer not null,
+          data text not null
+        );
+        
+        CREATE INDEX ix_notes_usn on notes (usn);
+        CREATE INDEX ix_cards_usn on cards (usn);
+        CREATE INDEX ix_notes_csum on notes (csum);
+      `);
+      
+      // Insert collection data
+      const confData = JSON.stringify({
+        nextPos: 1,
+        estTimes: true,
+        activeDecks: [deckId],
+        sortType: "noteFld",
+        timeLim: 0,
+        sortBackwards: false,
+        addToCur: true,
+        curDeck: deckId,
+        newBury: true,
+        newSpread: 0,
+        dueCounts: true,
+        curModel: modelId,
+        collapseTime: 1200
+      });
+      
+      const decksData = JSON.stringify({
+        [deckId]: {
+          id: deckId,
+          name: "PDF Study Cards",
+          extendRev: 50,
+          usn: 0,
+          collapsed: false,
+          newToday: [0, 0],
+          revToday: [0, 0],
+          lrnToday: [0, 0],
+          timeToday: [0, 0],
+          conf: 1,
+          desc: "Cards created from PDF",
+          dyn: 0,
+          extendNew: 10
+        }
+      });
+      
+      const dconfData = JSON.stringify({
+        1: {
+          id: 1,
+          name: "Default",
+          replayq: true,
+          lapse: {
+            leechFails: 8,
+            delays: [10],
+            minInt: 1,
+            leechAction: 0,
+            mult: 0
+          },
+          rev: {
+            perDay: 200,
+            fuzz: 0.05,
+            ivlFct: 1,
+            maxIvl: 36500,
+            ease4: 1.3,
+            bury: true,
+            minSpace: 1
+          },
+          timer: 0,
+          maxTaken: 60,
+          usn: 0,
+          new: {
+            perDay: 20,
+            delays: [1, 10],
+            separate: true,
+            ints: [1, 4, 7],
+            initialFactor: 2500,
+            bury: true,
+            order: 1
+          },
+          mod: 0,
+          autoplay: true
+        }
+      });
+      
+      const modelsData = JSON.stringify({
+        [modelId]: {
+          id: modelId,
+          name: "Basic",
+          type: 0,
+          mod: timestamp,
+          usn: -1,
+          sortf: 0,
+          did: deckId,
+          tmpls: [
+            {
+              name: "Card 1",
+              ord: 0,
+              qfmt: "{{Front}}",
+              afmt: "{{FrontSide}}<hr id='answer'>{{Back}}",
+              bqfmt: "",
+              bafmt: "",
+              did: null,
+              bfont: "",
+              bsize: 0
+            }
+          ],
+          flds: [
+            {
+              name: "Front",
+              ord: 0,
+              sticky: false,
+              rtl: false,
+              font: "Arial",
+              size: 20
+            },
+            {
+              name: "Back",
+              ord: 1,
+              sticky: false,
+              rtl: false,
+              font: "Arial",
+              size: 20
+            }
+          ],
+          css: ".card {\n font-family: arial;\n font-size: 20px;\n text-align: center;\n color: black;\n background-color: white;\n}",
+          latexPre: "\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage[utf8]{inputenc}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n",
+          latexPost: "\\end{document}",
+          req: [[0, "all", [0]]]
+        }
+      });
+      
+      db.exec(`
+        INSERT INTO col VALUES (
+          1, 1640995200, ${timestamp}, ${timestamp}, 11, 0, 0, 0,
+          '${confData.replace(/'/g, "''")}',
+          '${modelsData.replace(/'/g, "''")}',
+          '${decksData.replace(/'/g, "''")}',
+          '${dconfData.replace(/'/g, "''")}',
+          '{}'
+        );
+      `);
+      
+      // Insert notes and cards
+      processedCards.forEach((card, index) => {
+        const noteId = index + 1;
+        const guid = `guid${noteId}${timestamp}`;
+        const front = card.front.replace(/'/g, "''");
+        const back = (card.back.text + card.imageHtml).replace(/'/g, "''");
+        const fields = `${front}\x1f${back}`;
+        
+        db.exec(`
+          INSERT INTO notes VALUES (
+            ${noteId}, '${guid}', ${modelId}, ${timestamp}, -1, '',
+            '${fields}', '${front}', ${Math.floor(Math.random() * 1000000)}, 0, ''
+          );
+          
+          INSERT INTO cards VALUES (
+            ${noteId}, ${noteId}, ${deckId}, 0, ${timestamp}, -1, 0, 0, ${noteId}, 0, 2500, 0, 0, 0, 0, 0, 0, ''
+          );
+        `);
+      });
+      
+      // Export database as binary data
+      const data = db.export();
+      zip.file("collection.anki2", data);
+      
+      // Generate and download the .apkg file
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      
+      const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'anki-cards.txt';
+      a.download = 'pdf-study-cards.apkg';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      // Show instructions to user
-      alert(`Export successful! 
+      alert(`✅ Successfully exported ${cards.length} cards to .apkg format!
 
-To import into Anki:
-1. Open Anki
-2. Go to File → Import
-3. Select the downloaded 'anki-cards.txt' file
-4. Choose "Fields separated by: Comma"
-5. Map Field 1 to Front, Field 2 to Back
-6. Click Import
+The file 'pdf-study-cards.apkg' has been downloaded. Simply double-click it or import it directly into Anki.
 
-Your ${cards.length} cards with images will be imported successfully.`);
+Your images will display properly as separate media files in Anki.`);
       
-      console.log('Successfully exported', cards.length, 'cards to Anki-compatible format');
+      console.log('Successfully exported', cards.length, 'cards to .apkg format with', mediaIndex, 'images');
       
     } catch (error) {
       console.error('Export failed:', error);
-      
-      // Alternative: Create a simpler format without images
-      try {
-        let simpleContent = '';
-        cards.forEach(card => {
-          simpleContent += `Q: ${card.front}\nA: ${card.back.text}\n\n`;
-        });
-        
-        const blob = new Blob([simpleContent], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'study-cards-simple.txt';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        alert('Exported as simple text file. Images are not included in this format.');
-      } catch (fallbackError) {
-        console.error('Fallback export also failed:', fallbackError);
-        alert('Export failed. Please try again.');
-      }
+      alert('❌ Export failed. Please try again or check the console for details.');
     }
   };
 
