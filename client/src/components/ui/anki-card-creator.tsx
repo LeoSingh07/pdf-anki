@@ -126,7 +126,7 @@ export const AnkiCardCreator: React.FC<AnkiCardCreatorProps> = ({ onAddImage }) 
       
       const db = new SQL.Database();
       
-      // Create Anki database schema
+      // Create complete Anki database schema
       db.exec(`
         CREATE TABLE col (
           id integer primary key,
@@ -179,9 +179,29 @@ export const AnkiCardCreator: React.FC<AnkiCardCreatorProps> = ({ onAddImage }) 
           data text not null
         );
         
+        CREATE TABLE revlog (
+          id integer primary key,
+          cid integer not null,
+          usn integer not null,
+          ease integer not null,
+          ivl integer not null,
+          lastIvl integer not null,
+          factor integer not null,
+          time integer not null,
+          type integer not null
+        );
+        
+        CREATE TABLE graves (
+          usn integer not null,
+          oid integer not null,
+          type integer not null
+        );
+        
         CREATE INDEX ix_notes_usn on notes (usn);
         CREATE INDEX ix_cards_usn on cards (usn);
         CREATE INDEX ix_notes_csum on notes (csum);
+        CREATE INDEX ix_revlog_usn on revlog (usn);
+        CREATE INDEX ix_revlog_cid on revlog (cid);
       `);
       
       // Insert collection data
