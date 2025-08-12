@@ -86,8 +86,8 @@ export const AnkiCardCreator: React.FC<AnkiCardCreatorProps> = ({ onAddImage }) 
       const modelId = Math.floor(Math.random() * 1000000000);
       const timestamp = Date.now();
       
-      // Media files list for Anki (index array for max compatibility)
-      const mediaFiles: (string | null)[] = [];
+      // Media files mapping for Anki
+      const mediaFiles: { [key: string]: string } = {};
       
       // Process images and create media files
       let mediaIndex = 0;
@@ -102,7 +102,7 @@ export const AnkiCardCreator: React.FC<AnkiCardCreatorProps> = ({ onAddImage }) 
           zip.file(filename, base64Data, { base64: true });
           
           // Add to media mapping
-          mediaFiles[mediaIndex] = filename;
+          mediaFiles[mediaIndex.toString()] = filename;
           
           // Create HTML reference for the image
           imageReferences += `<br><img src="${filename}">`;
