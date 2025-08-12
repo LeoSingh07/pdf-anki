@@ -78,232 +78,83 @@ export const AnkiCardCreator: React.FC<AnkiCardCreatorProps> = ({ onAddImage }) 
     if (cards.length === 0) return;
 
     try {
-      const zip = new JSZip();
+      // Create a simple text-based format that can be imported into Anki
+      let csvContent = '';
+      const mediaFiles: string[] = [];
       
-      // Generate a unique deck ID
-      const deckId = Date.now();
-      const timestamp = Math.floor(Date.now() / 1000);
-      
-      // Collection.anki2 - SQLite database structure for Anki
-      const collectionData = {
-        "ver": 11,
-        "crt": timestamp,
-        "mod": timestamp,
-        "scm": timestamp,
-        "dty": 0,
-        "usn": -1,
-        "ls": 0,
-        "conf": {
-          "nextPos": 1,
-          "estTimes": true,
-          "activeDecks": [deckId],
-          "sortType": "noteFld",
-          "timeLim": 0,
-          "sortBackwards": false,
-          "addToCur": true,
-          "curDeck": deckId,
-          "newBury": true,
-          "newSpread": 0,
-          "dueCounts": true,
-          "curModel": deckId,
-          "collapseTime": 1200
-        },
-        "decks": {
-          [deckId]: {
-            "id": deckId,
-            "name": "PDF Study Cards",
-            "extendRev": 50,
-            "usn": 0,
-            "collapsed": false,
-            "newToday": [0, 0],
-            "revToday": [0, 0],
-            "lrnToday": [0, 0],
-            "timeToday": [0, 0],
-            "conf": 1,
-            "desc": "Cards created from PDF",
-            "dyn": 0,
-            "extendNew": 10
-          }
-        },
-        "dconf": {
-          "1": {
-            "id": 1,
-            "name": "Default",
-            "replayq": true,
-            "lapse": {
-              "leechFails": 8,
-              "delays": [10],
-              "minInt": 1,
-              "leechAction": 0,
-              "mult": 0
-            },
-            "rev": {
-              "perDay": 200,
-              "fuzz": 0.05,
-              "ivlFct": 1,
-              "maxIvl": 36500,
-              "ease4": 1.3,
-              "bury": true,
-              "minSpace": 1
-            },
-            "timer": 0,
-            "maxTaken": 60,
-            "usn": 0,
-            "new": {
-              "perDay": 20,
-              "delays": [1, 10],
-              "separate": true,
-              "ints": [1, 4, 7],
-              "initialFactor": 2500,
-              "bury": true,
-              "order": 1
-            },
-            "mod": 0,
-            "autoplay": true
-          }
-        },
-        "models": {
-          [deckId]: {
-            "id": deckId,
-            "name": "PDF Study Model",
-            "type": 0,
-            "mod": timestamp,
-            "usn": -1,
-            "sortf": 0,
-            "did": deckId,
-            "tmpls": [
-              {
-                "name": "Card 1",
-                "ord": 0,
-                "qfmt": "{{Front}}",
-                "afmt": "{{FrontSide}}<hr id=\"answer\">{{Back}}{{#Images}}<br><img src=\"{{Images}}\">{{/Images}}",
-                "bqfmt": "",
-                "bafmt": "",
-                "did": null,
-                "bfont": "",
-                "bsize": 0
-              }
-            ],
-            "flds": [
-              {
-                "name": "Front",
-                "ord": 0,
-                "sticky": false,
-                "rtl": false,
-                "font": "Arial",
-                "size": 20
-              },
-              {
-                "name": "Back",
-                "ord": 1,
-                "sticky": false,
-                "rtl": false,
-                "font": "Arial",
-                "size": 20
-              },
-              {
-                "name": "Images",
-                "ord": 2,
-                "sticky": false,
-                "rtl": false,
-                "font": "Arial",
-                "size": 20
-              }
-            ],
-            "css": ".card {\n font-family: arial;\n font-size: 20px;\n text-align: center;\n color: black;\n background-color: white;\n}\n\n.cloze {\n font-weight: bold;\n color: blue;\n}\n.nightMode .cloze {\n color: lightblue;\n}",
-            "latexPre": "\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage[utf8]{inputenc}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n",
-            "latexPost": "\\end{document}",
-            "req": [[0, "all", [0]]]
-          }
-        }
-      };
-      
-      // Create a simple text representation for the collection (Anki format is complex)
-      const collectionText = JSON.stringify(collectionData, null, 2);
-      zip.file("collection.anki2.txt", collectionText);
-      
-      // Media files (images from the cards)
-      const mediaFiles: { [key: string]: string } = {};
-      let mediaIndex = 0;
-      
-      // Notes data (the actual cards)
-      const notes = cards.map((card, index) => {
-        let imagesHtml = '';
-        card.back.images.forEach((imageData, imgIndex) => {
-          const filename = `image_${index}_${imgIndex}.png`;
-          const base64Data = imageData.split(',')[1]; // Remove data:image/png;base64,
-          zip.file(filename, base64Data, { base64: true });
-          mediaFiles[filename] = '';
-          imagesHtml += `<img src="${filename}">`;
-        });
+      // Process each card
+      for (let i = 0; i < cards.length; i++) {
+        const card = cards[i];
+        let front = card.front.replace(/"/g, '""'); // Escape quotes for CSV
+        let back = card.back.text.replace(/"/g, '""');
         
-        return {
-          id: index + 1,
-          guid: `guid_${index + 1}`,
-          mid: deckId,
-          mod: timestamp,
-          usn: -1,
-          tags: "",
-          flds: [
-            card.front,
-            card.back.text,
-            imagesHtml
-          ].join('\x1f'),
-          sfld: card.front,
-          csum: 0,
-          flags: 0,
-          data: ""
-        };
-      });
+        // Handle images - embed them as HTML img tags with base64 data
+        if (card.back.images.length > 0) {
+          let imageHtml = '';
+          card.back.images.forEach((imageData, imgIndex) => {
+            imageHtml += `<br><img src="${imageData}" style="max-width: 500px; height: auto;">`;
+          });
+          back += imageHtml;
+        }
+        
+        // Create CSV line (Front, Back)
+        csvContent += `"${front}","${back}"\n`;
+      }
       
-      // Add notes file
-      zip.file("notes.txt", JSON.stringify(notes, null, 2));
-      
-      // Add media file
-      zip.file("media", JSON.stringify(mediaFiles));
-      
-      // Generate and download the .apkg file
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      
-      const url = URL.createObjectURL(zipBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'pdf-study-cards.apkg';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      console.log('Successfully exported', cards.length, 'cards to .apkg format');
-      
-    } catch (error) {
-      console.error('Export failed:', error);
-      // Fallback to JSON export if .apkg generation fails
-      const exportData = {
-        cards: cards.map(card => ({
-          front: card.front,
-          back: card.back.text,
-          images: card.back.images,
-        })),
-        metadata: {
-          name: 'PDF Study Cards',
-          created: new Date().toISOString(),
-          count: cards.length,
-        },
-      };
-      
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: 'application/json',
+      // Create the file
+      const blob = new Blob([csvContent], { 
+        type: 'text/plain;charset=utf-8' 
       });
       
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'anki-cards-fallback.json';
+      a.download = 'anki-cards.txt';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      
+      // Show instructions to user
+      alert(`Export successful! 
+
+To import into Anki:
+1. Open Anki
+2. Go to File → Import
+3. Select the downloaded 'anki-cards.txt' file
+4. Choose "Fields separated by: Comma"
+5. Map Field 1 to Front, Field 2 to Back
+6. Click Import
+
+Your ${cards.length} cards with images will be imported successfully.`);
+      
+      console.log('Successfully exported', cards.length, 'cards to Anki-compatible format');
+      
+    } catch (error) {
+      console.error('Export failed:', error);
+      
+      // Alternative: Create a simpler format without images
+      try {
+        let simpleContent = '';
+        cards.forEach(card => {
+          simpleContent += `Q: ${card.front}\nA: ${card.back.text}\n\n`;
+        });
+        
+        const blob = new Blob([simpleContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'study-cards-simple.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        alert('Exported as simple text file. Images are not included in this format.');
+      } catch (fallbackError) {
+        console.error('Fallback export also failed:', fallbackError);
+        alert('Export failed. Please try again.');
+      }
     }
   };
 
