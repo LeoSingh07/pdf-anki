@@ -86,8 +86,8 @@ export const AnkiCardCreator: React.FC<AnkiCardCreatorProps> = ({ onAddImage }) 
       const modelId = Math.floor(Math.random() * 1000000000);
       const timestamp = Date.now();
       
-      // Media files mapping for Anki
-      const mediaFiles: { [key: string]: string } = {};
+      // Media files list for Anki (index array for max compatibility)
+      const mediaFiles: (string | null)[] = [];
       
       // Process images and create media files
       let mediaIndex = 0;
@@ -102,7 +102,7 @@ export const AnkiCardCreator: React.FC<AnkiCardCreatorProps> = ({ onAddImage }) 
           zip.file(filename, base64Data, { base64: true });
           
           // Add to media mapping
-          mediaFiles[mediaIndex.toString()] = filename;
+          mediaFiles[mediaIndex] = filename;
           
           // Create HTML reference for the image
           imageReferences += `<br><img src="${filename}">`;
@@ -360,9 +360,10 @@ export const AnkiCardCreator: React.FC<AnkiCardCreatorProps> = ({ onAddImage }) 
       zip.file("collection.anki2", data);
       
       // Generate and download the .apkg file
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const zipBlob = await zip.generateAsync({ type: 'blob', mimeType: 'application/x-anki-package' });
       
-      const url = URL.createObjectURL(zipBlob);
+      const apkgFile = new File([zipBlob], 'pdf-study-cards.apkg', { type: 'application/x-anki-package' });
+      const url = URL.createObjectURL(apkgFile);
       const a = document.createElement('a');
       a.href = url;
       a.download = 'pdf-study-cards.apkg';
