@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Build script that mimics npm run build:dev
+echo "🔧 Running development build..."
+
+# Set NODE_ENV to development
+export NODE_ENV=development
+
+# Run the build commands
+npx vite build --mode development && npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+
+echo "✅ Development build completed!"
