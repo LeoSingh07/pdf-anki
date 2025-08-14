@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "build:dev": "NODE_ENV=development vite build --mode development && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist"
+  }
+}
